@@ -152,11 +152,13 @@ public class ServerStreamingToClient {
         private final Map<String, List<EventListener>> listeners = new ConcurrentHashMap<>();
 
         public void sendEvent(String id, EventDto event) {
+
             listeners.getOrDefault(id, Collections.emptyList())
                     .forEach(listener -> listener.onEvent(event));
         }
 
         public void addListener(String id, EventListener eventListener) {
+
             listeners.compute(id, (key, list) -> {
                 if (list == null) {
                     list = Collections.synchronizedList(new ArrayList<>());
