@@ -95,14 +95,18 @@ public class ServerStreamingToClient {
 
     private static Flux<EventDto> getEvents(String id, EventsBroker eventsBroker) {
 
+        ValueHolder<EventListener> valueHolder = new ValueHolder<>(null);
+
         Flux<EventDto> flux = Flux.create(sink -> {
             EventListener listener = sink::next;
+            valueHolder.setValue(listener);
+
             eventsBroker.addListener(id, listener);
         });
 
         return flux.doFinally((signalType) -> {
-            log.info("Flux stream finished for id: {}", id);
-//            eventsBroker.removeListener(id, valueHolder.getValue());
+            log.info("Events stream finished for id: {}", id);
+            eventsBroker.removeListener(id, valueHolder.getValue());
         });
     }
 
@@ -153,6 +157,23 @@ public class ServerStreamingToClient {
                 list.remove(eventListener);
                 return list.isEmpty() ? null : list;
             });
+        }
+    }
+
+    public static class ValueHolder<T> {
+
+        private T value;
+
+        public ValueHolder(T value) {
+            this.value = value;
+        }
+
+        public T getValue() {
+            return value;
+        }
+
+        public void setValue(T value) {
+            this.value = value;
         }
     }
 }
