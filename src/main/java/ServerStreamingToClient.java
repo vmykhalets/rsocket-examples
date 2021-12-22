@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class ServerStreamingToClient {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
 
         var eventsBroker = new EventsBroker();
         final ObjectMapper objectMapper = new ObjectMapper();
@@ -54,7 +54,7 @@ public class ServerStreamingToClient {
         RSocket socket1 =
                 RSocketConnector.connectWith(TcpClientTransport.create("localhost", 7000)).block();
 
-        socket1
+        var disposable1 = socket1
                 .requestStream(DefaultPayload.create("1"))
                 .map(Payload::getDataUtf8)
                 .doOnNext(p -> log.info("Client 1: " + p))
@@ -65,7 +65,7 @@ public class ServerStreamingToClient {
         RSocket socket2 =
                 RSocketConnector.connectWith(TcpClientTransport.create("localhost", 7000)).block();
 
-        socket2
+        var disposable2 = socket2
                 .requestStream(DefaultPayload.create("2"))
                 .map(Payload::getDataUtf8)
                 .doOnNext(p -> log.info("Client 2: " + p))
@@ -80,17 +80,28 @@ public class ServerStreamingToClient {
         System.out.println("Enter text: ");
         String text = br.readLine();
 
-        while (id != null && text != null) {
+        while (id.trim().length() > 0 && text.trim().length() > 0) {
 
             // send event to client
             eventsBroker.sendEvent(id, EventDto.builder().date(new Date()).text(text).build());
 
             System.out.println("Enter client id: ");
             id = br.readLine();
+            if (id.trim().length() == 0) {
+                break;
+            }
 
             System.out.println("Enter text: ");
             text = br.readLine();
+            if (text.trim().length() == 0) {
+                break;
+            }
         }
+
+        disposable1.dispose();
+        disposable2.dispose();
+
+        Thread.sleep(1000);
     }
 
     private static Flux<EventDto> getEvents(String id, EventsBroker eventsBroker) {
@@ -104,7 +115,11 @@ public class ServerStreamingToClient {
             eventsBroker.addListener(id, listener);
         });
 
-        return flux.doFinally((signalType) -> {
+        return flux
+                .doOnError(error -> {
+                    log.error(error.getMessage());
+                })
+                .doFinally((signalType) -> {
             log.info("Events stream finished for id: {}", id);
             eventsBroker.removeListener(id, valueHolder.getValue());
         });
